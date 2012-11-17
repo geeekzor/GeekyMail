@@ -359,18 +359,23 @@ namespace GeekyMail
             finally
             {
                 Logging.Write(GeekyMail.GetColor(Color.YellowGreen), "{0}", DateTime.Now);
-                foreach (var item in _hList)
+                foreach (var item in _hList.Where(item => !String.IsNullOrEmpty(item)))
                 {
-                    if (!String.IsNullOrEmpty(item))
-                        Logging.Write(GeekyMail.GetColor(Color.YellowGreen), item);
+                    Logging.Write(GeekyMail.GetColor(Color.YellowGreen), item);
                 }
             }
         }
 
         private void SendTestMail(object sender, EventArgs e)
         {
-            var gm = new GeekyMail();
-            gm.SendMailDirectly("A Test Mail.");
+            try
+            {
+                GeekyMail.Instance.SendMailDirectly("Hey");
+            }
+            catch (Exception ex)
+            {
+                Logging.WriteException(ex);
+            }
         }
 
         private void ResetSettings(object sender, EventArgs e)
@@ -386,6 +391,9 @@ namespace GeekyMail
     public class GeekyMail : HBPlugin
     {
         #region HBPlugin
+
+        private static GeekyMail _instance = new GeekyMail();
+        public static GeekyMail Instance { get { return _instance; } }
 
         public static List<string> ChatList = new List<string>();
         private static List<string> _hList;
@@ -405,9 +413,7 @@ namespace GeekyMail
             EnableSsl = Config.Instance.EmailHostUseSsl,
             DeliveryMethod = SmtpDeliveryMethod.Network,
             UseDefaultCredentials = false,
-            Credentials =
-                new NetworkCredential
-                (Config.Instance.PluginEmailAddress, Config.Instance.PluginEmailPassword)
+            Credentials = new NetworkCredential(Config.Instance.PluginEmailAddress, Config.Instance.PluginEmailPassword),
         };
 
         private static TimeSpan StatusTimeSpan { get { return new TimeSpan(0, 0, Config.Instance.HourlyStatusTime, 0); } }
@@ -416,7 +422,7 @@ namespace GeekyMail
         public override string Name { get { return "GeekyMail"; } }
         private static string GName { get { return "GeekyMail"; } }
         public override string Author { get { return "Geeekzor"; } }
-        public override Version Version { get { return new Version(1, 6, 6); } }
+        public override Version Version { get { return new Version(1, 7, 0); } }
         public override bool WantButton { get { return true; } }
         public override string ButtonText { get { return Name + " Config"; } }
 
@@ -447,8 +453,8 @@ namespace GeekyMail
         private static void Debug(string format, params object[] args)
         {
             if (Config.Instance.DebugLogging)
-                Logging.Write(GetColor(Color.GreenYellow), "[" + GName + "] [DEBUG] " + String.Format(format, args));
-            Logging.Write(GetColor(Color.GreenYellow), "[" + GName + "] [DEBUG] " + String.Format(format, args));
+                Logging.Write(LogLevel.Normal,GetColor(Color.GreenYellow), "[" + GName + "] [DEBUG] " + String.Format(format, args));
+            Logging.Write(LogLevel.Diagnostic, GetColor(Color.GreenYellow), "[" + GName + "] [DEBUG] " + String.Format(format, args));
         }
 
         public override void OnButtonPress()
@@ -562,6 +568,7 @@ namespace GeekyMail
             {
                 Logging.Write(string.Format("Error, check your settings. \r\n{0}", e.Error.Message));
                 Logging.Write(GetColor(Color.Tomato), string.Format("{0}", e.Error.Message));
+                smtpClient.SendAsyncCancel();
             }
             else
             {
@@ -587,10 +594,13 @@ namespace GeekyMail
             };
             try
             {
+                
                 smtpClient.SendAsync(mailMessage, "InstaMail");
+                //smtpClient.Send(mailMessage);
             }
             catch (Exception x)
             {
+                smtpClient.SendAsyncCancel();
                 Logging.Write(GetColor(Color.Tomato), string.Format("Error: {0}", x.Message));
             }
         }
@@ -625,12 +635,14 @@ namespace GeekyMail
                 AlternateView plainView = AlternateView.CreateAlternateViewFromString(sb.ToString(), null, "text/plain");
                 plainView.TransferEncoding = TransferEncoding.QuotedPrintable;
                 mailMessage.AlternateViews.Add(plainView);
-
+                
                 smtpClient.SendAsync(mailMessage, args);
+                //smtpClient.Send(mailMessage);
             }
             catch (Exception exception)
             {
                 Debug(string.Format("{0}", exception));
+                smtpClient.SendAsyncCancel();
             }
         }
 
@@ -1146,7 +1158,7 @@ namespace GeekyMail
         [Category("Email Settings")]
         [DisplayName("Plugin Email")]
         [Description("The Email Address the Plugin will use to send emails.")]
-        [Styx.Helpers.DefaultValue("your@email.com")]
+        [Styx.Helpers.DefaultValue("you@gmail.com")]
         public string PluginEmailAddress { get; set; }
 
         [Setting]
@@ -1168,14 +1180,14 @@ namespace GeekyMail
         [Category("Email Settings")]
         [DisplayName("Your Email")]
         [Description("The Email Address the Plugin will send emails to.")]
-        [Styx.Helpers.DefaultValue("your@email.com")]
+        [Styx.Helpers.DefaultValue("you@gmail.com")]
         public string YourEmailAddress { get; set; }
 
         [Setting]
         [Category("Email Settings")]
         [DisplayName("Email Host Address")]
         [Description("The Address to the Email service, I prefer Gmail, its easy to use.")]
-        [Styx.Helpers.DefaultValue("smtp.email.com")]
+        [Styx.Helpers.DefaultValue("smtp.gmail.com")]
         public string EmailHostAddress { get; set; }
 
         [Setting]
